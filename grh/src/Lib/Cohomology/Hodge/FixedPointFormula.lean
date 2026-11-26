@@ -355,7 +355,7 @@ lemma IsTangentPoly.hasJacobianRatio_eval_div {X : CommAlg E ⥤ Type 1}
     have h_N : N (-S φ) = t • (φ - S φ) - φ := by
       simp only [N, LinearMap.comp_apply, LinearEquiv.coe_coe, map_neg,
         LinearEquiv.symm_apply_apply, LinearMap.sub_apply, LinearMap.smul_apply,
-        Module.End.one_apply]
+        one_apply_eq_self]
       module
     calc
       t • ξ α - ξ γ = D (t • (φ - S φ) - φ) := by
@@ -363,7 +363,7 @@ lemma IsTangentPoly.hasJacobianRatio_eval_div {X : CommAlg E ⥤ Type 1}
       _ = D (N (-S φ)) := by rw [h_N]
       _ = (D.toLinearMap ∘ₗ N ∘ₗ D.symm.toLinearMap).toMatrix' *ᵥ (ξ α - ξ γ) := by
         rw [LinearMap.toMatrix'_mulVec, hα_coord, hγ_coord, ← map_sub, sub_sub_cancel_left]
-        simp
+        simp only [LinearMap.comp_apply, LinearEquiv.coe_coe, LinearEquiv.symm_apply_apply]
 
 /-- Let every field-valued point of `W` lie in a chart with `d` étale coordinates. Let `P` be a
 tangent polynomial of `c`, `u` at the `k`-point `w`, that is, the algebraic form of
@@ -392,7 +392,10 @@ lemma IsTangentPoly.constIfCoincident {c u : W ⟶ X} {w : W.obj (CommAlgCat.of 
   -- `k ⊕ T* → k → k[ε]`.
   have h_map : ofHom (TrivSqZeroExt.map (Dual.eval k T 0)) =
       ofHom (TrivSqZeroExt.map (Dual.eval k T 0)) ≫ SqZeroExt.fst ≫ structureMap := by
-    ext r <;> simp
+    refine CommAlgCat.hom_ext (AlgHom.ext fun r ↦ TrivSqZeroExt.ext rfl ?_)
+    simp only [CommAlgCat.hom_comp, AlgHom.coe_comp, Function.comp_apply, CommAlgCat.hom_ofHom,
+      TrivSqZeroExt.snd_map, map_zero, LinearMap.zero_apply, structureMap,
+      Algebra.ofId_apply, TrivSqZeroExt.algebraMap_eq_inl', TrivSqZeroExt.snd_inl]
   show W.map (ofHom (TrivSqZeroExt.map (Dual.eval k T 0))) v =
     W.map (SqZeroExt.fst ≫ structureMap) (W.map (ofHom (TrivSqZeroExt.map (Dual.eval k T 0))) v)
   rw [← W.map_comp_apply, ← h_map]
@@ -572,8 +575,13 @@ private lemma apply_tangent_sub_sum_eq_zero {E : Type} [Field E] [Algebra k E]
   have h_tan := congrFun (hQ_tan _ _ _ h_base
     (map_comp_map_point_eq_app_map_of_map_point_eq hφ _)
     (map_comp_map_point_eq_app_map_of_map_point_eq hψ _)) i
-  -- `using!` lets `simpa` unfold `P`, `μ` and the components of `TrivSqZeroExt.map`.
-  simpa [sub_eq_zero, ← μ_snd, hf, P] using! h_tan
+  change t * (μ (ν (φ (A.coordinate i)))).2 - (μ (ν (ψ (A.coordinate i)))).2 =
+      ∑ l : Fin d, Q i l * ((μ (ν (φ (A.coordinate l)))).2 - (μ (ν (ψ (A.coordinate l)))).2)
+    at h_tan
+  rw [map_sub, map_sub, map_smul, map_sum, sub_eq_zero]
+  simp only [map_mul, Matrix.map_apply, AlgHom.commutes, smul_eq_mul,
+    ← μ_snd, hf, Pi.sub_apply, map_sub]
+  exact h_tan
 
 /-- The multiplicity at one coincidence. On `O`, the class `δ` (relative to the complement of the
 diagonal) is the symbol of the coordinate differences of the chart `A`; `lift u c` maps the chart
@@ -1001,10 +1009,21 @@ lemma New.Variety.IsPointSum.cup_pointClass {k : Type} [Field k] [CharZero k] {d
   obtain ⟨b, g', hb, hy⟩ := y_pt z.2 rfl
   let G : Fin (d + 1) → (a.prod b).coordRing := Fin.snoc (g · ⊗ₜ 1) (1 ⊗ₜ g' 0)
   -- The equations `g` and `g'` together cut out `z` in the product chart.
-  have cut : CutsOutLocus (X ⊗ Y) (ComesFromPoints {z}) (a.prod b).point G := fun _ α ↦ by
-    refine .symm (exists_eq_left.trans (Prod.ext_iff.trans ?_))
-    simpa -dsimp [G, ComesFromPoints, Ideal.span_le, Set.subset_def, and_comm] using!
-      ((hx.1 _ (_ ≫ α)).and (hy.1 _ (_ ≫ α))).symm
+  have cut : CutsOutLocus (X ⊗ Y) (ComesFromPoints {z}) (a.prod b).point G := fun C α ↦ by
+    have h_hx := hx.1 C (tensorInl ≫ α)
+    have h_hy := hy.1 C (tensorInr ≫ α)
+    have h_span_iff : Ideal.span (Set.range G) ≤ RingHom.ker α.hom ↔
+        Ideal.span (Set.range g) ≤ RingHom.ker (tensorInl ≫ α).hom ∧
+          Ideal.span (Set.range g') ≤ RingHom.ker (tensorInr ≫ α).hom := by
+      rw [Ideal.span_le, Ideal.span_le, Ideal.span_le,
+        Set.range_subset_iff, Set.range_subset_iff, Set.range_subset_iff]
+      simp only [SetLike.mem_coe, RingHom.mem_ker, Fin.forall_fin_succ', G,
+        Fin.snoc_castSucc, Fin.snoc_last, Unique.forall_iff]
+      rfl
+    rw [h_span_iff, h_hx, h_hy]
+    simp only [ComesFromPoints, Set.mem_singleton_iff, exists_eq_left]
+    rw [X.map_comp_apply, Y.map_comp_apply]
+    exact ⟨fun ⟨h₁, h₂⟩ ↦ Prod.ext h₁ h₂, fun h ↦ ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩⟩
   obtain ⟨ξ, ξ_local, ξ_pt⟩ :=
     (a.prod b).exists_isLocalSymbol cut ((range_pointMap_prod ..).ge _ ⟨ha, hb⟩)
   let U : Subfunctor (X ⊗ Y) :=
@@ -1025,17 +1044,31 @@ lemma New.Variety.IsPointSum.cup_pointClass {k : Type} [Field k] [CharZero k] {d
         exact ⟨_, hO_open.preimage _, hqO, fun _ _ h ↦ .inr (hO_le _ h)⟩
     -- By excision it suffices to compare pull-backs to the product chart. That of `η` is the
     -- product of the symbols of `g ⊗ 1` and `1 ⊗ g'` (`pull_cup_along_pair`, `hx`, `hy`).
+    have hx' := (hx.map (tensorInl (B := b.coordRing))).2.2.trans (one_smul k _)
+    have hy' := (hy.map (tensorInr (A := a.coordRing))).2.2.trans (one_smul k _)
     refine (hodge_excision (a.prod b).isOpenSubfunctor near (by rfl) _).1
       ((pull_cup_along_pair ..).trans
-        ((congrArg _ (congrArg₂ (fun u v ↦ cup _ u v _) (hx.map _).2.2 (hy.map _).2.2)).trans ?_))
-    change _ =
-      (ξ.map (relFreeAb.map (𝟙 _) hU)).map (relFreeAb.map (pointMap (a.prod b).point) le_rfl)
-    -- Read `pull_cup_along_pair` backwards: this is the pull-back, along `(g ⊗ 1, 1 ⊗ g')`, of the
-    -- product of the universal symbols on `𝔸^d × 𝔸^1`.
-    erw [one_smul, one_smul, ← pull_cup_along_pair]
-    -- `symbolClass_succ` turns the product into `[dG / G]`, the pull-back of `ξ` by `ξ_local`.
-    simpa -dsimp [G, (symbolClass_succ ..).2, ← HodgeH.map_comp, pointMap_comp] using!
-      congr($(ξ_local.2.2).map (relFreeAb.map (𝟙 (reprBy _)) fun K _ h ↦ hU K h)).symm
+        ((congrArg _ (congrArg₂ (fun u v ↦ cup _ u v _) hx' hy')).trans ?_))
+    obtain ⟨h_snoc, h_succ⟩ := symbolClass_succ (k := k) (d := d)
+    refine (pull_cup_along_pair (x := symbolClass) (y := symbolClass) _ _ _ _).symm.trans ?_
+    rw [h_succ, ← HodgeH.map_comp]
+    let f_incl : relFreeAb (U.preimage (pointMap (a.prod b).point)) ⟶
+        relFreeAb ((offPoints {z}).preimage (pointMap (a.prod b).point)) :=
+      relFreeAb.map (𝟙 (reprBy (a.prod b).coordRing)) fun K _ h ↦ hU K h
+    have h_comm_hom :
+        relFreeAb.map (pointMap (a.prod b).point) le_rfl ≫ relFreeAb.map (𝟙 _) hU =
+          f_incl ≫ relFreeAb.map (pointMap (a.prod b).point) le_rfl :=
+      relFreeAb.hom_ext fun _ _ ↦ rfl
+    have h_rhs_comm := (HodgeH.map_comp ..).symm.trans
+      ((congrArg (fun φ ↦ HodgeH.map φ ξ) h_comm_hom).trans (HodgeH.map_comp ..))
+    have hξ' := ξ_local.2.2.trans (one_smul k _)
+    have h_rhs_eq := (congrArg (HodgeH.map f_incl) hξ').trans (HodgeH.map_comp ..).symm
+    refine .trans ?_ (h_rhs_comm.trans h_rhs_eq).symm
+    refine congrArg (fun φ ↦ HodgeH.map φ symbolClass) (relFreeAb.hom_ext fun C σ ↦ ?_)
+    change relFreeAb.mk _ ((pointMap _ ≫ affineSpace.snoc k d).app C σ) =
+      relFreeAb.mk _ ((pointMap (Y := affineSpace k (d + 1)) ⟨G⟩).app C σ)
+    rw [pointMap_comp]
+    rfl
   rw [cl_fst, cl_snd]
   -- The left side is the image of `η`, hence of `ξ`, in the cohomology of `X ⊗ Y`.
   refine (cup_map _ _ _ _ (whiskerLeft _ (π _)) (whiskerLeft _ (π _)) rfl).symm.trans
