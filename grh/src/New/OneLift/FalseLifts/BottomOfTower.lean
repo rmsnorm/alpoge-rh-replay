@@ -132,7 +132,7 @@ lemma rowShear_mul_eq_self_of_vecMul_eq_zero {v : r → R} {l : n → R} {x : Ma
     (hlx : l ᵥ* x = 0) :
     rowShear ι v l * x = x := by
   ext a b
-  simp [rowShear, Matrix.add_mul, vecMulVec_mul, hlx, vecMulVec_apply]
+  simp [rowShear, Matrix.add_mul, vecMulVec_mul, hlx]
 
 /-- The matrix `rowShear ι v l` is block upper triangular with first block `1 + v λ`, where
 `λ = l ∘ ι`. -/
@@ -884,14 +884,32 @@ lemma exists_leftMul_eq_of_translatedBlockFn_ne_zero {A : Gf E r} {x : n × r �
   rw [matrixAt_leftMul, matrixAt_inclMatrix_mul, ← Matrix.mul_assoc, h_comp,
     completeColumns_mul_inclMatrix, map_inv, Matrix.mul_assoc, Units.mul_inv, Matrix.mul_one]
 
+private lemma levelTranslate_map_one (O : DescentPair E r n) :
+    star (O.levelChar 1) • LinearMap.funLeft ℂ ℂ (leftMul E r n (1 : O.levelGroup).val⁻¹) = 1 :=
+  LinearMap.ext fun Ψ ↦ funext fun x ↦ by
+    change star (O.levelChar 1) * Ψ (leftMul E r n (1 : Gf E n)⁻¹ x) = Ψ x
+    rw [O.levelChar.map_one, star_one, one_mul, inv_one, (leftMul E r n).map_one]
+    rfl
+
+private lemma levelTranslate_map_mul (O : DescentPair E r n) (h k : O.levelGroup) :
+    star (O.levelChar (h * k)) • LinearMap.funLeft ℂ ℂ (leftMul E r n (h * k).val⁻¹) =
+      (star (O.levelChar h) • LinearMap.funLeft ℂ ℂ (leftMul E r n h.val⁻¹)) *
+        (star (O.levelChar k) • LinearMap.funLeft ℂ ℂ (leftMul E r n k.val⁻¹)) :=
+  LinearMap.ext fun Ψ ↦ funext fun x ↦ by
+    change star (O.levelChar (h * k)) * Ψ (leftMul E r n (h.val * k.val)⁻¹ x) =
+      star (O.levelChar h) *
+        (star (O.levelChar k) * Ψ (leftMul E r n k.val⁻¹ (leftMul E r n h.val⁻¹ x)))
+    rw [O.levelChar.map_mul, star_mul', _root_.mul_inv_rev, (leftMul E r n).map_mul, mul_assoc]
+    rfl
+
 /-- The translation `Ψ ↦ c Ψ(h⁻¹ ·)` by an element `h` of the level group of `O`, where `c` is the
 conjugate of the level character `O.levelChar h`: the product over the places `w ∈ Q` of
 `χ_w(det h_w')⁻¹`, for the first diagonal block `h_w'` of the reduction of `h` at `w`. -/
 def levelTranslate (O : DescentPair E r n) :
     Representation ℂ O.levelGroup ((n × r → 𝔸f E) → ℂ) where
   toFun h := star (O.levelChar h) • LinearMap.funLeft ℂ ℂ (leftMul E r n h.val⁻¹)
-  map_one' := LinearMap.ext fun Ψ ↦ funext fun x ↦ by simp
-  map_mul' h k := LinearMap.ext fun Ψ ↦ funext fun x ↦ by simp [mul_assoc, mul_left_comm]
+  map_one' := by exact O.levelTranslate_map_one
+  map_mul' h k := by exact O.levelTranslate_map_mul h k
 
 lemma levelTranslate_apply (h : O.levelGroup) (Ψ : (n × r → 𝔸f E) → ℂ) (x : n × r → 𝔸f E) :
     O.levelTranslate h Ψ x = star (O.levelChar h) * Ψ (leftMul E r n h.val⁻¹ x) := rfl
