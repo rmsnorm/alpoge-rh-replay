@@ -186,7 +186,13 @@ lemma exists_integrable_kernel_bound {A : Space E n' s'} {U₁ : Space E n₁ s�
       _ ≤ ‖φ₁ g₁‖ * ‖φ₂ g₂‖ * (|C| * m * (U₁.height g₁ * U₂.height g₂) ^ B) := by gcongr
       _ = |C| * (‖φ₁ g₁‖ * U₁.height g₁ ^ B) * (‖φ₂ g₂‖ * U₂.height g₂ ^ B) * m := by ring
       _ ≤ |C| * |D| * D' * m := by grw [(hD g₁).trans (le_abs_self D), hD' g₂]
-  have h_cont : Continuous F := by fun_prop
+  have h_cont : Continuous F :=
+    ((hφ₁_cont.comp (continuous_fst.comp continuous_fst)).mul
+      (hφ₂_cont.comp (continuous_snd.comp continuous_fst))).mul
+      (((by fun_prop : Continuous fun g₂ : G E s₂ ↦ (ν₀.val g₂.det : ℂ)).comp
+          (continuous_snd.comp continuous_fst)).mul
+        ((hK_cont v).comp ((G.isClosedEmbedding_sum.continuous.comp continuous_fst).prodMk
+          continuous_snd)))
   exact ⟨.of_bound h_cont.aestronglyMeasurable _ (.of_forall h_bound), h_bound⟩
 
 /-- Let `s` be a sign vector on a finite index type `n`, so that a polynomial `P` in variables
@@ -214,7 +220,7 @@ lemma exists_eq_mul_of_forall_polyVector {J : Type*} {Λ : J → fockSpace s →
   have h_span (v : fockSpace s) :
       (fun j : J ↦ Λ j v) ∈ Submodule.span ℂ {ρ} ↔ ∃ r : ℂ, ∀ j : J, Λ j v = r * ρ j := by
     simp [Submodule.mem_span_singleton, funext_iff, eq_comm]
-  exact (h_span x).1 ((Submodule.closed_of_finiteDimensional _).isSeqClosed
+  exact (h_span x).1 ((Submodule.isClosed_of_finiteDimensional _).isSeqClosed
     (fun m ↦ (h_span _).2 (h_poly (P m))) (tendsto_pi_nhds.2 h_tendsto))
 
 /-! ### The kernels multiply -/
@@ -563,17 +569,19 @@ lemma pairTransposedLift_comp_pairLift_mul (h₁ : IsPairEdge a₁ b₁ e₁ e P
   let k : Gf E n' := liftMod g
   let lifted : A.Form e := pairLift U₁ A (a₁ i) (b₁ i) P₁ (Pi.single (g.val * x.toCols₁) 1) e₁ e f
   have h_char : χ g.val.det = (a₂ i)⁻¹.val (detFin s' k) * (a₁ i)⁻¹.val (detFin s' k) := by
-    simpa [mul_comm] using (h_tame.apply_det (s := s') (liftMod g)).symm
+    have h := (h_tame.apply_det (s := s') (liftMod g)).symm
+    rw [reductionGL_liftMod, _root_.mul_inv_rev] at h
+    exact h.trans (Circle.coe_mul _ _)
   have h_first : A.formRep e k⁻¹ lifted = ((a₁ i)⁻¹.val (detFin s' k) : ℂ) •
       pairLift U₁ A (a₁ i) (b₁ i) P₁ (Pi.single x.toCols₁ 1) e₁ e f := by
-    simpa only [map_one, Module.End.one_apply] using (h₁.isArrow i).left.formRep_formLift_of_eq_smul
+    simpa only [map_one, one_apply_eq_self] using (h₁.isArrow i).left.formRep_formLift_of_eq_smul
       (pairWeil_modDatum_single_mul_left U₁ A (a₁ i) (b₁ i) g x.toCols₁ _) f
   have h_second :
       pairTransposedLift U₂ A (a₂ i) (b₂ i) P₂ (Pi.single (g.val * x.toCols₂) 1) e e₂ lifted =
         ((a₂ i)⁻¹.val (detFin s' k) : ℂ) •
           pairTransposedLift U₂ A (a₂ i) (b₂ i) P₂ (Pi.single x.toCols₂ 1) e e₂
             (A.formRep e k⁻¹ lifted) := by
-    simpa only [map_one, Module.End.one_apply] using (h₂.isArrow_swap i).formRep_formLift_of_eq_smul
+    simpa only [map_one, one_apply_eq_self] using (h₂.isArrow_swap i).formRep_formLift_of_eq_smul
       (pairWeil_modDatum_single_mul_left U₂ A (a₂ i) (b₂ i) g x.toCols₂ _) lifted
   rw [h_first, map_smul, smul_smul, ← h_char] at h_second
   -- the column blocks of `g * x` are by definition `g` times those of `x`
@@ -603,16 +611,18 @@ lemma pairLift_comp_pairTransposedLift_mul (h₁ : IsPairEdge b₁' a₁' (star 
   let lifted : A'.Form e' :=
     pairTransposedLift A' U₁ (b₁' i) (a₁' i) P₁' (Pi.single (y.toRows₁ * g.val) 1) e₁ e' f
   have h_char : χ g.val.det = (a₂' i)⁻¹.val (detFin s k) * (a₁' i)⁻¹.val (detFin s k) := by
-    simpa [mul_comm] using (h_tame.apply_det (s := s) (liftMod g)).symm
+    have h := (h_tame.apply_det (s := s) (liftMod g)).symm
+    rw [reductionGL_liftMod, _root_.mul_inv_rev] at h
+    exact h.trans (Circle.coe_mul _ _)
   have h_first : A'.formRep e' k lifted = ((a₁' i)⁻¹.val (detFin s k) : ℂ) •
       pairTransposedLift A' U₁ (b₁' i) (a₁' i) P₁' (Pi.single y.toRows₁ 1) e₁ e' f := by
-    simpa only [map_one, Module.End.one_apply] using (h₁.isArrow_swap i).formRep_formLift_of_eq_smul
+    simpa only [map_one, one_apply_eq_self] using (h₁.isArrow_swap i).formRep_formLift_of_eq_smul
       (pairWeil_modDatum_single_mul_right A' U₁ (b₁' i) (a₁' i) g y.toRows₁ _) f
   have h_second :
       pairLift A' U₂ (b₂' i) (a₂' i) P₂' (Pi.single (y.toRows₂ * g.val) 1) e' e₂ lifted =
         ((a₂' i)⁻¹.val (detFin s k) : ℂ) • pairLift A' U₂ (b₂' i) (a₂' i) P₂'
           (Pi.single y.toRows₂ 1) e' e₂ (A'.formRep e' k lifted) := by
-    simpa only [map_one, Module.End.one_apply] using (h₂.isArrow i).left.formRep_formLift_of_eq_smul
+    simpa only [map_one, one_apply_eq_self] using (h₂.isArrow i).left.formRep_formLift_of_eq_smul
       (pairWeil_modDatum_single_mul_right A' U₂ (b₂' i) (a₂' i) g y.toRows₂ _) lifted
   rw [h_first, map_smul, smul_smul, ← h_char] at h_second
   -- the row blocks of `y * g` are by definition those of `y` times `g`
